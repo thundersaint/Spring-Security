@@ -1,0 +1,88 @@
+<beans:beans xmlns="http://www.springframework.org/schema/security"
+             xmlns:beans="http://www.springframework.org/schema/beans"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+           http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-3.0.xsd">
+
+	<beans:bean id="dataSource" class="org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseFactoryBean">
+	    <beans:property name="databaseType" value="H2"/>
+	    <beans:property name="databasePopulator">
+	        <beans:bean class="org.springframework.jdbc.datasource.init.ResourceDatabasePopulator">
+	            <beans:property name="scripts" value="/WEB-INF/setup.sql"/>
+	        </beans:bean>
+	    </beans:property>
+	</beans:bean>
+	
+	<beans:bean id="passwordEncoder" class="org.springframework.security.authentication.encoding.ShaPasswordEncoder">
+	    <beans:constructor-arg index="0" value="256"/>
+	</beans:bean>
+	
+    <beans:bean id = "saltSource" class="org.springframework.security.authentication.dao.ReflectionSaltSource">
+        <beans:property name="userPropertyToUse" value="username"/>
+    </beans:bean>
+    
+    <beans:bean id="passwordSecurerComponent"  name="userPasswordSecurerComponent" class="com.gifts.component.PasswordSecurerComponent">
+	    <beans:constructor-arg index="0" ref="passwordEncoder"/>
+	    <beans:constructor-arg index="1" ref="saltSource"/>
+	</beans:bean>	
+	
+	<beans:bean id="jdbcTemplate"  class="org.springframework.jdbc.core.JdbcTemplate">
+	    <beans:constructor-arg index="0" ref="dataSource"/>
+	</beans:bean>
+	
+	<beans:bean id="userRepository" class="com.gifts.repository.UserAccountRepositoryImpl">
+	    <beans:constructor-arg index="0" ref="jdbcTemplate"/>
+	    <beans:constructor-arg index="1" ref="passwordSecurerComponent"/>
+	</beans:bean>
+	
+	<beans:bean id="userAuthorityRepository" class="com.gifts.repository.UserAuthorityRepositoryImpl">
+	    <beans:constructor-arg index="0" ref="jdbcTemplate"/>
+	</beans:bean>
+	
+	<beans:bean id="userDetailsService"  name="userAuthenticationProvider" class="com.gifts.component.AuthenticationUserDetailGetter">
+	    <beans:constructor-arg index="0" ref="userRepository"/>
+	    <beans:constructor-arg index="1" ref="userAuthorityRepository"/>
+	</beans:bean>
+				
+	<beans:bean id="daoAuthenticationProvider" class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
+	    <beans:property name="userDetailsService" ref="userDetailsService"/>
+	    <beans:property name="saltSource" ref ="saltSource" />
+	    <beans:property name="passwordEncoder" ref="passwordEncoder"/>
+	</beans:bean>
+	
+	<beans:bean id="accessDecisionManager" class="org.springframework.security.access.vote.AffirmativeBased">
+	    <beans:property name="decisionVoters">
+	        <beans:list>
+	            <beans:bean class="org.springframework.security.access.vote.RoleVoter">
+	                <beans:property name="rolePrefix" value="ROLE_"/>
+	            </beans:bean>
+	            <beans:bean class="org.springframework.security.access.vote.AuthenticatedVoter"/>
+	        </beans:list>
+	    </beans:property>
+	</beans:bean>
+	
+	<authentication-manager alias="authenticationManager">
+	    <authentication-provider ref="daoAuthenticationProvider"/>
+	</authentication-manager>
+	
+	<http use-expressions="false" access-decision-manager-ref="accessDecisionManager">
+	     <session-management session-fixation-protection="migrateSession"/>
+	
+	     <!-- intercepted urls -->
+	     <intercept-url pattern="/j_spring_security_logout" access="IS_AUTHENTICATED_FULLY, IS_AUTHENTICATED_REMEMBERED" requires-channel="http"/>
+	     <intercept-url pattern="/j_spring_security_check" access="IS_AUTHENTICATED_ANONYMOUSLY" requires-channel="http"/>
+	     <!-- intercept-url pattern="/req/myaccount" access="ROLE_SUPERVISOR" requires-channel="http"/-->
+	     <intercept-url pattern="/" access="IS_AUTHENTICATED_ANONYMOUSLY" requires-channel="http"/>
+	     <intercept-url pattern="/req/myaccount" access="IS_AUTHENTICATED_FULLY" requires-channel="http"/>
+	
+	     <!-- form login -->
+		 <form-login login-page="/login" default-target-url='/req/myaccount' always-use-default-target='false' authentication-failure-url="/login?login_error=1" />
+	
+	     <!-- logout -->
+	     <logout logout-url="/j_spring_security_logout"/>
+	
+	     <!-- remember me -->
+	     <remember-me key="rememberMeKey" user-service-ref="userDetailsService"/>
+	</http>
+
+</beans:beans>
